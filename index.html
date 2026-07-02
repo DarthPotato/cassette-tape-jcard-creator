@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>J-Card Creator — free printable cassette J-cards</title>
+<meta name="description" content="Make printable cassette tape J-cards for free. Search any album to auto-fill the track list and cover art, customize the design, and export a print-ready PNG or print straight to PDF. No account, no watermark, no paywall.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='6' width='30' height='20' rx='3' fill='%231d1a17'/%3E%3Crect x='7' y='11' width='18' height='7' rx='3.5' fill='%23f6efdf'/%3E%3Ccircle cx='11' cy='14.5' r='2' fill='%231d1a17'/%3E%3Ccircle cx='21' cy='14.5' r='2' fill='%231d1a17'/%3E%3Crect x='4' y='8' width='24' height='1.6' fill='%23d64524'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/fonts.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="masthead">
+    <svg class="logo" viewBox="0 0 64 42" aria-hidden="true">
+      <rect x="1" y="1" width="62" height="40" rx="5" fill="#1d1a17"/>
+      <rect x="5" y="5" width="54" height="3" fill="#d64524"/>
+      <rect x="5" y="10" width="54" height="3" fill="#e8a33c"/>
+      <rect x="12" y="17" width="40" height="14" rx="7" fill="#f6efdf"/>
+      <circle cx="22" cy="24" r="4.2" fill="#1d1a17"/>
+      <circle cx="42" cy="24" r="4.2" fill="#1d1a17"/>
+      <circle cx="22" cy="24" r="1.6" fill="#f6efdf"/>
+      <circle cx="42" cy="24" r="1.6" fill="#f6efdf"/>
+      <path d="M14 41 l4 -6 h28 l4 6 z" fill="#33302b"/>
+    </svg>
+    <div>
+      <h1>J&#8209;Card Creator</h1>
+      <p class="tagline">Free printable cassette J&#8209;cards. Search an album, tweak the design, print. No account. No watermark. No paywall.</p>
+    </div>
+  </div>
+</header>
+
+<main class="app">
+
+  <!-- ============ CONTROLS ============ -->
+  <section class="controls" aria-label="Editor controls">
+
+    <details class="panel" open id="panel-search">
+      <summary><span class="p-icon">&#128269;</span> Find an album</summary>
+      <div class="panel-body">
+        <div class="search-row">
+          <input id="search-input" type="search" placeholder="Album or artist — e.g. “Rumours Fleetwood Mac”" autocomplete="off" aria-label="Search for an album">
+          <button id="search-btn" class="btn btn-primary" type="button">Search</button>
+        </div>
+        <p class="hint">Searches iTunes &amp; MusicBrainz — free, no API key. Tracks, times and cover art auto-fill.
+          <button id="demo-btn" class="linklike" type="button">or load a demo album</button>
+        </p>
+        <div id="search-status" class="status" hidden></div>
+        <ul id="search-results" class="results" hidden></ul>
+      </div>
+    </details>
+
+    <details class="panel" open id="panel-info">
+      <summary><span class="p-icon">&#9999;&#65039;</span> Album info</summary>
+      <div class="panel-body grid-2">
+        <label>Album title
+          <input id="f-album" type="text" placeholder="Album title">
+        </label>
+        <label>Artist
+          <input id="f-artist" type="text" placeholder="Artist">
+        </label>
+        <label>Year
+          <input id="f-year" type="text" inputmode="numeric" placeholder="1984">
+        </label>
+        <label>Note line <span class="sub">(shown small on the front)</span>
+          <input id="f-note" type="text" placeholder="Stereo · Dolby NR · C-90">
+        </label>
+        <label class="span-2">Spine text <span class="sub">(leave blank for “Artist — Album”)</span>
+          <input id="f-spine" type="text" placeholder="Custom spine text">
+        </label>
+      </div>
+    </details>
+
+    <details class="panel" open id="panel-tracks">
+      <summary><span class="p-icon">&#127925;</span> Tracks</summary>
+      <div class="panel-body">
+        <div class="tracks-toolbar">
+          <button id="autobalance-btn" class="btn" type="button" title="Split tracks across sides so both run about the same length">&#9878; Auto-balance sides</button>
+          <label class="check"><input id="f-durations" type="checkbox" checked> Show times</label>
+        </div>
+        <div class="side-block">
+          <h3>Side A <span id="sideA-total" class="side-total"></span></h3>
+          <ul id="sideA-list" class="track-list" data-side="A"></ul>
+          <form class="add-track" data-side="A"><input type="text" placeholder="Add a track to side A…" aria-label="Add track to side A"><button class="btn btn-small" type="submit">+ Add</button></form>
+        </div>
+        <div class="side-block">
+          <h3>Side B <span id="sideB-total" class="side-total"></span></h3>
+          <ul id="sideB-list" class="track-list" data-side="B"></ul>
+          <form class="add-track" data-side="B"><input type="text" placeholder="Add a track to side B…" aria-label="Add track to side B"><button class="btn btn-small" type="submit">+ Add</button></form>
+        </div>
+      </div>
+    </details>
+
+    <details class="panel" open id="panel-art">
+      <summary><span class="p-icon">&#128444;&#65039;</span> Cover art</summary>
+      <div class="panel-body">
+        <div class="art-row">
+          <div id="art-thumb" class="art-thumb" aria-label="Current cover art"><span>no art</span></div>
+          <div class="art-actions">
+            <label class="btn file-btn">Upload image<input id="art-upload" type="file" accept="image/*" hidden></label>
+            <button id="art-palette-btn" class="btn" type="button" title="Pick background, text and accent colors from the cover">&#127912; Match colors</button>
+            <button id="art-remove-btn" class="btn btn-danger" type="button">Remove</button>
+          </div>
+        </div>
+        <div class="grid-3 sliders">
+          <label>Zoom <input id="art-zoom" type="range" min="1" max="2.5" step="0.01" value="1"></label>
+          <label>Pan X <input id="art-x" type="range" min="0" max="1" step="0.01" value="0.5"></label>
+          <label>Pan Y <input id="art-y" type="range" min="0" max="1" step="0.01" value="0.5"></label>
+        </div>
+      </div>
+    </details>
+
+    <details class="panel" open id="panel-design">
+      <summary><span class="p-icon">&#127912;</span> Design</summary>
+      <div class="panel-body">
+        <fieldset class="layout-picker">
+          <legend>Layout</legend>
+          <label><input type="radio" name="layout" value="classic" checked><span>Classic<small>art + text</small></span></label>
+          <label><input type="radio" name="layout" value="fullbleed"><span>Full bleed<small>art fills front</small></span></label>
+          <label><input type="radio" name="layout" value="minimal"><span>Minimal<small>type only</small></span></label>
+        </fieldset>
+
+        <label class="stack">Typeface
+          <select id="f-font"></select>
+        </label>
+
+        <fieldset class="presets">
+          <legend>Color presets</legend>
+          <div id="preset-row" class="preset-row"></div>
+        </fieldset>
+
+        <div class="grid-3 colorpickers">
+          <label>Background <input id="c-bg" type="color" value="#f6efdf"></label>
+          <label>Text <input id="c-text" type="color" value="#221f1a"></label>
+          <label>Accent <input id="c-accent" type="color" value="#d64524"></label>
+        </div>
+
+        <div class="toggles">
+          <label class="check"><input id="f-spineinvert" type="checkbox" checked> Accent spine</label>
+          <label class="check"><input id="f-stripes" type="checkbox" checked> Retro stripes</label>
+          <label class="check"><input id="f-uppercase" type="checkbox"> UPPERCASE titles</label>
+          <label class="check"><input id="f-sidelabels" type="checkbox" checked> Side A/B labels</label>
+          <label class="check"><input id="f-foldlines" type="checkbox" checked> Fold guides</label>
+        </div>
+      </div>
+    </details>
+
+    <details class="panel" open id="panel-export">
+      <summary><span class="p-icon">&#128424;&#65039;</span> Print &amp; export</summary>
+      <div class="panel-body">
+        <div class="export-row">
+          <button id="export-png" class="btn btn-primary" type="button">&#11015; PNG (300 dpi)</button>
+          <button id="export-png-hi" class="btn" type="button">&#11015; PNG (600 dpi)</button>
+          <button id="print-btn" class="btn" type="button">&#128424; Print / PDF</button>
+        </div>
+        <label class="check"><input id="f-cropmarks" type="checkbox"> Add crop &amp; fold marks (3&nbsp;mm margin) to PNG</label>
+        <p class="hint">The card is exactly 4&#8243; &times; 4&thinsp;1/16&#8243; (101.6 &times; 103.1&nbsp;mm) — print at 100% scale, cut, and fold on the dashed lines.</p>
+        <div class="export-row">
+          <button id="save-json" class="btn btn-small" type="button">Save design (.json)</button>
+          <label class="btn btn-small file-btn">Load design<input id="load-json" type="file" accept=".json,application/json" hidden></label>
+          <button id="reset-btn" class="btn btn-small btn-danger" type="button">Reset all</button>
+        </div>
+      </div>
+    </details>
+
+  </section>
+
+  <!-- ============ PREVIEW ============ -->
+  <section class="preview-pane" aria-label="J-card preview">
+    <div class="preview-toolbar">
+      <span class="preview-title">Live preview</span>
+      <button id="rotate-btn" class="btn btn-small" type="button" title="Rotate the preview">&#8635; Rotate</button>
+    </div>
+    <div id="card-stage" class="card-stage">
+      <div id="card-holder" class="card-holder"></div>
+    </div>
+    <p class="preview-caption">Panels, top to bottom: <b>back flap</b> · <b>spine</b> · <b>front</b>. Dashed lines are folds.</p>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <p>Everything runs in your browser — nothing is uploaded anywhere. Metadata &amp; art:
+    <a href="https://musicbrainz.org" rel="noopener" target="_blank">MusicBrainz</a>,
+    <a href="https://coverartarchive.org" rel="noopener" target="_blank">Cover Art Archive</a> and the iTunes Search API.
+    Free forever; art is for personal use.</p>
+</footer>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="print-area" aria-hidden="true"></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

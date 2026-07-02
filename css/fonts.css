@@ -1,0 +1,33 @@
+/* Self-hosted fonts (from the fontsource project / Google Fonts, OFL-licensed).
+   Keeping them local means the app works offline and makes export embedding trivial. */
+
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('../fonts/inter-latin-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 700; font-display: swap;
+  src: url('../fonts/inter-latin-700-normal.woff2') format('woff2'); }
+
+@font-face { font-family: 'Space Grotesk'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('../fonts/space-grotesk-latin-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Space Grotesk'; font-style: normal; font-weight: 700; font-display: swap;
+  src: url('../fonts/space-grotesk-latin-700-normal.woff2') format('woff2'); }
+
+@font-face { font-family: 'Oswald'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('../fonts/oswald-latin-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Oswald'; font-style: normal; font-weight: 700; font-display: swap;
+  src: url('../fonts/oswald-latin-700-normal.woff2') format('woff2'); }
+
+@font-face { font-family: 'Playfair Display'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('../fonts/playfair-display-latin-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Playfair Display'; font-style: normal; font-weight: 700; font-display: swap;
+  src: url('../fonts/playfair-display-latin-700-normal.woff2') format('woff2'); }
+
+@font-face { font-family: 'Special Elite'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('../fonts/special-elite-latin-400-normal.woff2') format('woff2'); }
+
+@font-face { font-family: 'Permanent Marker'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('../fonts/permanent-marker-latin-400-normal.woff2') format('woff2'); }
+
+@font-face { font-family: 'Courier Prime'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('../fonts/courier-prime-latin-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Courier Prime'; font-style: normal; font-weight: 700; font-display: swap;
+  src: url('../fonts/courier-prime-latin-700-normal.woff2') format('woff2'); }
