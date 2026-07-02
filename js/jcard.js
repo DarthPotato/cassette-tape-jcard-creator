@@ -73,17 +73,24 @@ function textEl(x, y, str, fs, opts = {}) {
   return `<text ${a.join(' ')}>${esc(str)}</text>`;
 }
 
-function artImage(cover, box, clipId) {
-  const href = cover.dataUrl || cover.srcUrl;
+function artImage(art, box, clipId) {
+  const href = art.dataUrl || art.srcUrl;
   if (!href) return null;
-  const iw = cover.w || 1000, ih = cover.h || 1000;
-  const scale = Math.max(box.w / iw, box.h / ih) * (cover.zoom || 1);
+  const rot = (((art.rot || 0) % 360) + 360) % 360;
+  const w = art.w || 1000, h = art.h || 1000;
+  // effective dimensions after rotation; zoom < 1 letterboxes instead of cropping
+  const iw = rot % 180 ? h : w;
+  const ih = rot % 180 ? w : h;
+  const scale = Math.max(box.w / iw, box.h / ih) * (art.zoom || 1);
   const dw = iw * scale, dh = ih * scale;
-  const dx = box.x - (dw - box.w) * (cover.x ?? 0.5);
-  const dy = box.y - (dh - box.h) * (cover.y ?? 0.5);
+  const dx = box.x - (dw - box.w) * (art.x ?? 0.5);
+  const dy = box.y - (dh - box.h) * (art.y ?? 0.5);
+  const cx = dx + dw / 2, cy = dy + dh / 2;
+  const nw = w * scale, nh = h * scale;
+  const transform = rot ? ` transform="rotate(${rot} ${cx.toFixed(2)} ${cy.toFixed(2)})"` : '';
   return {
     defs: `<clipPath id="${clipId}"><rect x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}"/></clipPath>`,
-    body: `<image href="${esc(href)}" x="${dx.toFixed(2)}" y="${dy.toFixed(2)}" width="${dw.toFixed(2)}" height="${dh.toFixed(2)}" preserveAspectRatio="none" clip-path="url(#${clipId})"/>`,
+    body: `<g clip-path="url(#${clipId})"><image href="${esc(href)}"${transform} x="${(cx - nw / 2).toFixed(2)}" y="${(cy - nh / 2).toFixed(2)}" width="${nw.toFixed(2)}" height="${nh.toFixed(2)}" preserveAspectRatio="none"/></g>`,
   };
 }
 
@@ -434,13 +441,32 @@ export function renderJCard(state, opts = {}) {
 
   let body;
   if (d.layout === 'replica') {
-    // the original J-card scan IS the card: no generated text, spine or barcode
+    // the original J-card scan IS the card: no generated text, spine or barcode.
+    // scan layers (front/spine/back regions) win over the single cover image.
+    const REGIONS = {
+      card: { x: 0, y: 0, w: W, h: H },
+      back: { x: 0, y: 0, w: W, h: BACK },
+      spine: { x: 0, y: BACK, w: W, h: SPINE },
+      front: { x: 0, y: BACK + SPINE, w: W, h: CARD.FRONT },
+    };
     body = `<rect x="0" y="0" width="${W}" height="${H}" fill="${d.bg}"/>`;
-    const img = artImage(state.cover, { x: 0, y: 0, w: W, h: H }, `${o.id}-replica`);
-    if (img) {
-      defs += img.defs;
-      body += img.body;
-    } else if (o.placeholders) {
+    const layers = (state.scans || []).filter(s => s.dataUrl || s.srcUrl);
+    let img = null;
+    if (layers.length) {
+      layers.forEach((s, i) => {
+        const layerImg = artImage(s, REGIONS[s.region] || REGIONS.card, `${o.id}-scan${i}`);
+        defs += layerImg.defs;
+        body += layerImg.body;
+      });
+      img = true;
+    } else {
+      img = artImage(state.cover, REGIONS.card, `${o.id}-replica`);
+      if (img) {
+        defs += img.defs;
+        body += img.body;
+      }
+    }
+    if (!img && o.placeholders) {
       body += cassetteGlyph(W / 2 - 13, H * 0.32, 26, d.accent, 'none');
       body += textEl(W / 2, H * 0.56, 'Replica layout', 4.2, { fill: d.text, anchor: 'middle', weight: o.bold, opacity: 0.75 });
       body += textEl(W / 2, H * 0.56 + 6, 'load a cassette edition or upload a full J-card scan', 2.7, { fill: d.text, anchor: 'middle', opacity: 0.55 });

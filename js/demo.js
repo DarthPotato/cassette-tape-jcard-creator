@@ -76,7 +76,8 @@ export function demoState(base) {
     id: uid(), title, duration, side: i < 6 ? 'A' : 'B',
   }));
   const cover = makeDemoCover();
-  s.cover = { dataUrl: cover.dataUrl, srcUrl: null, w: cover.w, h: cover.h, zoom: 1, x: 0.5, y: 0.5 };
+  s.cover = { dataUrl: cover.dataUrl, srcUrl: null, w: cover.w, h: cover.h, zoom: 1, x: 0.5, y: 0.5, rot: 0 };
+  s.scans = [];
   s.design.layout = 'classic';
   s.design.bg = '#1c1233';
   s.design.text = '#ffe9d6';
