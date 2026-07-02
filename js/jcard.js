@@ -101,6 +101,76 @@ function cassetteGlyph(x, y, w, color, bgColor) {
   </g>`;
 }
 
+/* ---------- barcode (real EAN-13 encoding) ---------- */
+
+const EAN = {
+  L: ['0001101', '0011001', '0010011', '0111101', '0100011', '0110001', '0101111', '0111011', '0110111', '0001011'],
+  G: ['0100111', '0110011', '0011011', '0100001', '0011101', '0111001', '0000101', '0010001', '0001001', '0010111'],
+  R: ['1110010', '1100110', '1101100', '1000010', '1011100', '1001110', '1010000', '1000100', '1001000', '1110100'],
+  parity: ['LLLLLL', 'LLGLGG', 'LLGGLG', 'LLGGGL', 'LGLLGG', 'LGGLLG', 'LGGGLL', 'LGLGLG', 'LGLGGL', 'LGGLGL'],
+};
+
+function ean13Check(d12) {
+  let sum = 0;
+  for (let i = 0; i < 12; i++) sum += d12[i] * (i % 2 === 0 ? 1 : 3);
+  return (10 - (sum % 10)) % 10;
+}
+
+/**
+ * Use the given EAN/UPC digits when valid; otherwise derive a stable,
+ * checksum-correct fake from the seed text so the card doesn't change
+ * between renders.
+ */
+function barcodeDigits(value, seedText) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.length === 13) return digits.split('').map(Number);
+  if (digits.length === 12) {
+    const d = digits.split('').map(Number);
+    return [...d, ean13Check(d)];
+  }
+  let h = 2166136261;
+  for (const ch of (seedText || 'mixtape')) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  const d = [];
+  for (let i = 0; i < 12; i++) { h = (Math.imul(h, 1103515245) + 12345) >>> 0; d.push(h % 10); }
+  return [...d, ean13Check(d)];
+}
+
+const BC = { module: 0.16, quiet: 1.1, pad: 0.8, barH: 6.4, guardH: 7.4, digitFs: 1.7 };
+export const BARCODE_W = BC.quiet * 2 + 95 * BC.module;                       // 17.4
+export const BARCODE_H = BC.pad + BC.guardH + 0.4 + BC.digitFs + BC.pad * 0.6; // ~11
+
+function renderBarcode(state, x, y, o) {
+  const d = barcodeDigits(state.barcode, `${state.artist}|${state.album}`);
+  let bits = '101';
+  const parity = EAN.parity[d[0]];
+  for (let i = 0; i < 6; i++) bits += EAN[parity[i]][d[i + 1]];
+  bits += '01010';
+  for (let i = 7; i < 13; i++) bits += EAN.R[d[i]];
+  bits += '101';
+
+  const guard = i => i < 3 || (i >= 45 && i < 50) || i >= 92;
+  let bars = '';
+  let run = null; // {start, guard}
+  for (let i = 0; i <= bits.length; i++) {
+    const on = i < bits.length && bits[i] === '1';
+    if (on && !run) run = { start: i, guard: guard(i) };
+    else if (run && (!on || run.guard !== guard(i))) {
+      const bx = x + BC.quiet + run.start * BC.module;
+      const bw = (i - run.start) * BC.module;
+      const bh = run.guard ? BC.guardH : BC.barH;
+      bars += `<rect x="${bx.toFixed(3)}" y="${(y + BC.pad).toFixed(2)}" width="${bw.toFixed(3)}" height="${bh}" fill="#111"/>`;
+      run = on ? { start: i, guard: guard(i) } : null;
+    }
+  }
+
+  const label = `${d[0]}  ${d.slice(1, 7).join('')}  ${d.slice(7).join('')}`;
+  return `<g>
+    <rect x="${x}" y="${y}" width="${BARCODE_W}" height="${BARCODE_H}" rx="0.4" fill="#ffffff" stroke="${mix(o.text, o.bg, 0.4)}" stroke-width="0.14"/>
+    ${bars}
+    <text x="${(x + BARCODE_W / 2).toFixed(2)}" y="${(y + BC.pad + BC.guardH + 0.35 + BC.digitFs).toFixed(2)}" font-size="${BC.digitFs}" fill="#111" text-anchor="middle" letter-spacing="0.12">${esc(label)}</text>
+  </g>`;
+}
+
 /* ---------- panels ---------- */
 
 function renderBackFlap(state, o) {
@@ -110,7 +180,13 @@ function renderBackFlap(state, o) {
 
   const padX = 4, padTop = 2.6, padBottom = 2.0, gap = 6;
   const headerH = d.showSideLabels ? 3.6 : 0;
-  const colW = (W - padX * 2 - gap) / 2;
+  let rightEdge = W - padX;
+  if (d.showBarcode) {
+    const bcX = W - padX + 0.8 - BARCODE_W;
+    out += renderBarcode(state, bcX, (BACK - BARCODE_H) / 2, { text: d.text, bg: d.bg });
+    rightEdge = bcX - 3;
+  }
+  const colW = (rightEdge - padX - gap) / 2;
   const avail = BACK - padTop - padBottom - headerH;
   const yTop = padTop + headerH;
 
@@ -119,7 +195,7 @@ function renderBackFlap(state, o) {
 
   if (!A.length && !B.length) {
     if (o.placeholders) {
-      out += textEl(W / 2, BACK / 2 + 1, 'track list appears here', 2.6, {
+      out += textEl((padX + rightEdge) / 2, BACK / 2 + 1, 'track list appears here', 2.6, {
         fill: d.text, anchor: 'middle', opacity: 0.4, italic: true,
       });
     }

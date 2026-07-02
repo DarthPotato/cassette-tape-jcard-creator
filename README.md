@@ -12,6 +12,14 @@ Inspired by tools like vhs.texs.org, but 100% free and self-hostable.
   running times, release year and cover art are filled in automatically.
   Metadata comes from the **iTunes Search API** and **MusicBrainz** /
   **Cover Art Archive** — all free, key-less, called directly from the browser.
+- **Real cassette editions** — tick “cassette editions only” to search actual
+  tape releases on MusicBrainz. Where the Cover Art Archive has a scan you get
+  the **original J-card artwork**, plus the **factory Side A/B split** (tape
+  releases are stored as two-sided media) and the release's real barcode.
+- **Barcode** — a toggleable, spec-correct EAN-13 barcode on the back flap:
+  the release's real EAN/UPC when known (auto-filled from MusicBrainz, or
+  type your own), otherwise a stable checksum-valid code generated from the
+  artist + album.
 - **Real J-card dimensions** — the card is exactly 4″ × 4 1/16″
   (101.6 × 103.1 mm): 1″ back flap, ½″ spine, 2 9/16″ front panel.
   What you see is what prints.

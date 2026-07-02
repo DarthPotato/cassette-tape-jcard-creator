@@ -30,6 +30,7 @@ export function defaultState() {
     year: '',
     noteLine: '',
     spineText: '',
+    barcode: '', // EAN/UPC digits; blank = deterministic fake generated from artist+album
     tracks: [], // {id, title, duration(sec|null), side:'A'|'B'}
     cover: { dataUrl: null, srcUrl: null, w: 0, h: 0, zoom: 1, x: 0.5, y: 0.5 },
     design: {
@@ -40,6 +41,7 @@ export function defaultState() {
       accent: '#d64524',
       spineInvert: true,
       stripes: true,
+      showBarcode: true,
       uppercase: false,
       showDurations: true,
       showFoldLines: true,
@@ -70,7 +72,7 @@ export function clearSaved() {
 export function mergeState(obj) {
   const s = defaultState();
   if (!obj || typeof obj !== 'object') return s;
-  for (const k of ['album', 'artist', 'year', 'noteLine', 'spineText']) {
+  for (const k of ['album', 'artist', 'year', 'noteLine', 'spineText', 'barcode']) {
     if (typeof obj[k] === 'string') s[k] = obj[k];
   }
   if (Array.isArray(obj.tracks)) {
@@ -100,7 +102,7 @@ export function mergeState(obj) {
     for (const k of ['bg', 'text', 'accent']) {
       if (typeof d[k] === 'string' && /^#[0-9a-fA-F]{6}$/.test(d[k])) s.design[k] = d[k].toLowerCase();
     }
-    for (const k of ['spineInvert', 'stripes', 'uppercase', 'showDurations', 'showFoldLines', 'showSideLabels']) {
+    for (const k of ['spineInvert', 'stripes', 'showBarcode', 'uppercase', 'showDurations', 'showFoldLines', 'showSideLabels']) {
       if (typeof d[k] === 'boolean') s.design[k] = d[k];
     }
   }
