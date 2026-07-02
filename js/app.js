@@ -57,6 +57,8 @@ function syncFormFromState() {
   $('#art-x').value = state.cover.x;
   $('#art-y').value = state.cover.y;
   updateArtThumb();
+  buildLayerList();
+  updateScanStripHint();
 }
 
 for (const [sel, [key]] of Object.entries(fields)) {
@@ -111,7 +113,9 @@ $('#c-text').addEventListener('input', e => { state.design.text = e.target.value
 $('#c-accent').addEventListener('input', e => { state.design.accent = e.target.value; changed(); });
 
 $$('input[name="layout"]').forEach(r =>
-  r.addEventListener('change', () => { if (r.checked) { state.design.layout = r.value; changed(); } }));
+  r.addEventListener('change', () => {
+    if (r.checked) { state.design.layout = r.value; updateScanStripHint(); changed(); }
+  }));
 
 const toggleMap = {
   '#f-durations': 'showDurations', '#f-spineinvert': 'spineInvert', '#f-stripes': 'stripes',
@@ -376,11 +380,16 @@ function showScanStrip(images) {
     const thumbImg = btn.querySelector('img');
     if (thumbImg) thumbImg.addEventListener('error', () => thumbImg.remove());
     btn.addEventListener('click', async () => {
+      // in Replica, scans stack as layers; elsewhere a scan replaces the cover
+      if (state.design.layout === 'replica') {
+        await addScanLayer(im);
+        return;
+      }
       setStatus('Loading scan at full resolution…');
       try {
         const art = await loadBestArt(im.urls);
         if (!art.dataUrl && !art.srcUrl) throw new Error('no image');
-        state.cover = { ...state.cover, ...art, zoom: 1, x: 0.5, y: 0.5 };
+        state.cover = { ...state.cover, ...art, zoom: 1, x: 0.5, y: 0.5, rot: 0 };
         updateArtThumb();
         changed();
         toast(`Using the ${im.label.toLowerCase()} scan${art.w ? ` (${art.w}×${art.h}px)` : ''}.`);
@@ -391,7 +400,14 @@ function showScanStrip(images) {
     });
     row.appendChild(btn);
   }
+  updateScanStripHint();
   strip.hidden = false;
+}
+
+function updateScanStripHint() {
+  $('#scan-strip-hint').textContent = state.design.layout === 'replica'
+    ? '— click to add as a layer (front + spine + back can all go on the card)'
+    : '— click one to use it (originals, full resolution)';
 }
 
 $('#demo-btn').addEventListener('click', () => {
@@ -444,9 +460,120 @@ $('#art-palette-btn').addEventListener('click', async () => {
 
 for (const [sel, key] of [['#art-zoom', 'zoom'], ['#art-x', 'x'], ['#art-y', 'y']]) {
   $(sel).addEventListener('input', e => {
-    state.cover[key] = clamp(parseFloat(e.target.value) || 0, key === 'zoom' ? 1 : 0, key === 'zoom' ? 4 : 1);
+    state.cover[key] = clamp(parseFloat(e.target.value) || 0, key === 'zoom' ? 0.25 : 0, key === 'zoom' ? 4 : 1);
     changed();
   });
+}
+
+$('#art-rotate-btn').addEventListener('click', () => {
+  if (!state.cover.dataUrl && !state.cover.srcUrl) { toast('Load or upload an image first.'); return; }
+  state.cover.rot = ((state.cover.rot || 0) + 90) % 360;
+  changed();
+});
+
+/* ---- replica scan layers ---- */
+
+const REGION_LABELS = { card: 'Full card', front: 'Front panel', spine: 'Spine', back: 'Back flap' };
+
+/** guess which panel a scan belongs on from its label and shape */
+function guessRegion(label, w, h) {
+  const l = (label || '').toLowerCase();
+  if (l.includes('spine') && !l.includes('front') && !l.includes('back')) return 'spine';
+  if (l === 'back') return 'back';
+  const ratio = w && h ? w / h : 1;
+  if (ratio > 6) return 'spine';
+  if (ratio > 3) return 'back';
+  if (ratio > 1.25 && ratio < 2.2) return 'front';
+  return 'card';
+}
+
+function buildLayerList() {
+  const box = $('#layer-box');
+  const list = $('#layer-list');
+  list.innerHTML = '';
+  if (!state.scans.length) { box.hidden = true; return; }
+  for (const s of state.scans) {
+    const row = document.createElement('div');
+    row.className = 'layer';
+    row.dataset.id = s.id;
+    row.innerHTML = `
+      <img class="layer-thumb" src="${esc(s.dataUrl || s.srcUrl || '')}" alt="">
+      <div class="layer-controls">
+        <div class="layer-top">
+          <select class="l-region" aria-label="Panel this scan covers">
+            ${Object.entries(REGION_LABELS).map(([v, lbl]) =>
+              `<option value="${v}"${v === s.region ? ' selected' : ''}>${lbl}</option>`).join('')}
+          </select>
+          <button type="button" class="btn l-rot" title="Rotate 90°">&#10227;</button>
+          <button type="button" class="btn btn-danger l-del" title="Remove layer">&#10005;</button>
+        </div>
+        <div class="layer-sliders">
+          <label>zoom<input type="range" class="l-zoom" min="0.5" max="2.5" step="0.01" value="${s.zoom}"></label>
+          <label>pan x<input type="range" class="l-x" min="0" max="1" step="0.01" value="${s.x}"></label>
+          <label>pan y<input type="range" class="l-y" min="0" max="1" step="0.01" value="${s.y}"></label>
+        </div>
+      </div>`;
+    list.appendChild(row);
+  }
+  box.hidden = false;
+}
+
+$('#layer-list').addEventListener('input', e => {
+  const row = e.target.closest('.layer');
+  const s = state.scans.find(x => x.id === row?.dataset.id);
+  if (!s) return;
+  if (e.target.classList.contains('l-zoom')) s.zoom = clamp(parseFloat(e.target.value) || 1, 0.25, 4);
+  if (e.target.classList.contains('l-x')) s.x = clamp(parseFloat(e.target.value) || 0, 0, 1);
+  if (e.target.classList.contains('l-y')) s.y = clamp(parseFloat(e.target.value) || 0, 0, 1);
+  changed();
+});
+
+$('#layer-list').addEventListener('change', e => {
+  const row = e.target.closest('.layer');
+  const s = state.scans.find(x => x.id === row?.dataset.id);
+  if (!s) return;
+  if (e.target.classList.contains('l-region')) { s.region = e.target.value; changed(); }
+});
+
+$('#layer-list').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  const row = e.target.closest('.layer');
+  const s = state.scans.find(x => x.id === row?.dataset.id);
+  if (!btn || !s) return;
+  if (btn.classList.contains('l-rot')) { s.rot = ((s.rot || 0) + 90) % 360; changed(); }
+  if (btn.classList.contains('l-del')) {
+    state.scans = state.scans.filter(x => x !== s);
+    buildLayerList();
+    changed();
+  }
+});
+
+async function addScanLayer(im) {
+  if (state.scans.length >= 6) { toast('Six layers is plenty — remove one first.'); return; }
+  setStatus('Loading scan at full resolution…');
+  try {
+    const art = await loadBestArt(im.urls);
+    if (!art.dataUrl && !art.srcUrl) throw new Error('no image');
+    // keep the current full-card image as the base layer so adding a
+    // spine or back scan builds on it instead of replacing it
+    if (!state.scans.length && (state.cover.dataUrl || state.cover.srcUrl)) {
+      state.scans.push({
+        id: uid(), dataUrl: state.cover.dataUrl, srcUrl: state.cover.srcUrl,
+        w: state.cover.w, h: state.cover.h, region: 'card',
+        zoom: state.cover.zoom, x: state.cover.x, y: state.cover.y, rot: state.cover.rot || 0,
+      });
+    }
+    state.scans.push({
+      id: uid(), dataUrl: art.dataUrl, srcUrl: art.srcUrl, w: art.w, h: art.h,
+      region: guessRegion(im.label, art.w, art.h), zoom: 1, x: 0.5, y: 0.5, rot: 0,
+    });
+    buildLayerList();
+    changed();
+    toast(`Added the ${im.label.toLowerCase()} scan as a ${REGION_LABELS[state.scans.at(-1).region].toLowerCase()} layer — adjust it under “On the card”.`, 5000);
+  } catch {
+    toast('Could not load that scan.');
+  }
+  setStatus('');
 }
 
 /* ================= export ================= */

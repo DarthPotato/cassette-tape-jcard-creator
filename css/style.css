@@ -212,6 +212,23 @@ input:focus-visible, select:focus-visible, button:focus-visible {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px;
 }
 
+.layer-box { margin-top: 14px; }
+.layer-box h4 { margin: 0 0 6px; font-size: 13px; color: var(--ink-soft); }
+.layer-box h4 .sub { font-weight: 400; }
+.layer {
+  display: flex; gap: 10px; align-items: flex-start;
+  border: 1px solid var(--line); border-radius: 8px; background: #fff;
+  padding: 8px; margin-bottom: 8px;
+}
+.layer-thumb { width: 46px; height: 46px; object-fit: cover; border-radius: 5px; flex: none; background: #eee3cc; }
+.layer-controls { flex: 1; min-width: 0; }
+.layer-top { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+.layer-top select { flex: 1; margin-top: 0; padding: 4px 6px; font-size: 12.5px; }
+.layer-top .btn { padding: 4px 8px; font-size: 12px; }
+.layer-sliders { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px 10px; }
+.layer-sliders label { font-size: 11px; }
+.layer-sliders input[type="range"] { width: 100%; accent-color: var(--red); margin: 0; }
+
 fieldset { border: none; margin: 0 0 12px; padding: 0; }
 legend { font-size: 13px; font-weight: 600; color: var(--ink-soft); padding: 0; margin-bottom: 6px; }
 .layout-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

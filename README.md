@@ -21,6 +21,13 @@ Inspired by tools like vhs.texs.org, but 100% free and self-hostable.
   full original resolution, laid across all three panels, and the design
   colors are matched to the scan. A scan picker lists every image the archive
   holds for the release (front, back, spine…) so you can print the real thing.
+- **Scan layers** — in Replica mode, stack multiple scans on one card: assign
+  each to a region (full card, front panel, spine, back flap) with its own
+  zoom, pan and 90° rotation. Rebuild a J-card from separate front/spine/back
+  scans exactly like the original.
+- **Zoom out & rotate** — every image control zooms below 1:1 (letterboxing
+  instead of force-cropping oversized scans) and rotates in 90° steps for
+  sideways scans.
 - **Barcode** — a toggleable, spec-correct EAN-13 barcode on the back flap:
   the release's real EAN/UPC when known (auto-filled from MusicBrainz, or
   type your own), otherwise a stable checksum-valid code generated from the

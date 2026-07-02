@@ -32,7 +32,9 @@ export function defaultState() {
     spineText: '',
     barcode: '', // EAN/UPC digits; blank = deterministic fake generated from artist+album
     tracks: [], // {id, title, duration(sec|null), side:'A'|'B'}
-    cover: { dataUrl: null, srcUrl: null, w: 0, h: 0, zoom: 1, x: 0.5, y: 0.5 },
+    cover: { dataUrl: null, srcUrl: null, w: 0, h: 0, zoom: 1, x: 0.5, y: 0.5, rot: 0 },
+    // replica-mode scan layers: {id, dataUrl, srcUrl, w, h, region, zoom, x, y, rot}
+    scans: [],
     design: {
       layout: 'classic',        // classic | fullbleed | minimal
       font: 'inter',
@@ -85,15 +87,28 @@ export function mergeState(obj) {
         side: t.side === 'B' ? 'B' : 'A',
       }));
   }
-  if (obj.cover && typeof obj.cover === 'object') {
-    const c = obj.cover;
-    if (typeof c.dataUrl === 'string' && c.dataUrl.startsWith('data:image/')) s.cover.dataUrl = c.dataUrl;
-    if (typeof c.srcUrl === 'string') s.cover.srcUrl = c.srcUrl;
-    if (isFinite(c.w)) s.cover.w = c.w;
-    if (isFinite(c.h)) s.cover.h = c.h;
-    if (isFinite(c.zoom)) s.cover.zoom = Math.min(4, Math.max(1, c.zoom));
-    if (isFinite(c.x)) s.cover.x = Math.min(1, Math.max(0, c.x));
-    if (isFinite(c.y)) s.cover.y = Math.min(1, Math.max(0, c.y));
+  const mergeArt = (target, c) => {
+    if (typeof c.dataUrl === 'string' && c.dataUrl.startsWith('data:image/')) target.dataUrl = c.dataUrl;
+    if (typeof c.srcUrl === 'string') target.srcUrl = c.srcUrl;
+    if (isFinite(c.w)) target.w = c.w;
+    if (isFinite(c.h)) target.h = c.h;
+    if (isFinite(c.zoom)) target.zoom = Math.min(4, Math.max(0.25, c.zoom));
+    if (isFinite(c.x)) target.x = Math.min(1, Math.max(0, c.x));
+    if (isFinite(c.y)) target.y = Math.min(1, Math.max(0, c.y));
+    if ([0, 90, 180, 270].includes(c.rot)) target.rot = c.rot;
+    return target;
+  };
+  if (obj.cover && typeof obj.cover === 'object') mergeArt(s.cover, obj.cover);
+  if (Array.isArray(obj.scans)) {
+    s.scans = obj.scans
+      .filter(sc => sc && typeof sc === 'object' && (typeof sc.dataUrl === 'string' || typeof sc.srcUrl === 'string'))
+      .slice(0, 8)
+      .map(sc => {
+        const layer = mergeArt({ id: typeof sc.id === 'string' ? sc.id : uid(),
+          dataUrl: null, srcUrl: null, w: 0, h: 0, zoom: 1, x: 0.5, y: 0.5, rot: 0, region: 'card' }, sc);
+        if (['card', 'front', 'spine', 'back'].includes(sc.region)) layer.region = sc.region;
+        return layer;
+      });
   }
   if (obj.design && typeof obj.design === 'object') {
     const d = obj.design;
