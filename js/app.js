@@ -1,7 +1,7 @@
 import { $, $$, esc, mmss, parseDuration, toast, debounce, uid, clamp } from './util.js';
 import { defaultState, loadSaved, save, clearSaved, mergeState, autoBalance, sideSeconds, FONTS, PRESETS } from './state.js';
 import { renderJCard } from './jcard.js';
-import { searchAlbums, getAlbumTracks, loadBestArt, loadUpload, getReleaseImages } from './api.js';
+import { searchAlbums, getAlbumTracks, loadBestArt, loadUpload, getReleaseImages, getDiscogsToken, setDiscogsToken } from './api.js';
 import { exportPNG, printCard, saveDesign, readDesignFile } from './export.js';
 import { extractPalette, contrastText } from './palette.js';
 import { demoState } from './demo.js';
@@ -259,7 +259,7 @@ async function runSearch() {
       li.innerHTML = `<button type="button">
         ${r.thumb ? `<img src="${esc(r.thumb)}" alt="" loading="lazy">` : '<span class="noart"></span>'}
         <span class="meta"><span class="r-title">${r.isCassette ? '&#128252; ' : ''}${esc(r.title)}</span><span class="r-sub">${esc(sub)}</span></span>
-        <span class="src">${r.source === 'itunes' ? 'itunes' : 'mbrainz'}</span>
+        <span class="src">${r.source === 'itunes' ? 'itunes' : r.source === 'discogs' ? 'discogs' : 'mbrainz'}</span>
       </button>`;
       const img = li.querySelector('img');
       if (img && r.thumbMayFail) img.addEventListener('error', () => img.replaceWith(Object.assign(document.createElement('span'), { className: 'noart' })));
@@ -275,6 +275,9 @@ async function runSearch() {
 $('#search-btn').addEventListener('click', runSearch);
 searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') runSearch(); });
 
+$('#f-discogs-token').value = getDiscogsToken();
+$('#f-discogs-token').addEventListener('input', e => setDiscogsToken(e.target.value));
+
 let pickToken = 0;
 
 async function pickAlbum(r) {
@@ -287,7 +290,7 @@ async function pickAlbum(r) {
     if (token !== pickToken) return;
     state.album = r.title;
     state.artist = r.artist;
-    state.year = r.year || '';
+    state.year = r.year || info.year || '';
     state.barcode = info.barcode || '';
     state.tracks = info.tracks.map(t => ({ id: uid(), title: t.title, duration: t.duration, side: t.side || 'A' }));
     if (!info.hasSides) autoBalance(state);
@@ -297,17 +300,23 @@ async function pickAlbum(r) {
       ? `Loaded ${info.tracks.length} tracks with the release’s real Side A/B split.`
       : `Loaded ${info.tracks.length} tracks from “${r.title}”.`);
 
-    // offer every scan the Cover Art Archive holds for this release
-    if (r.source === 'mb') {
+    // offer every scan the source holds for this release
+    if (info.images?.length) {
+      showScanStrip(info.images);
+    } else if (r.source === 'mb') {
       getReleaseImages(r.id)
         .then(images => { if (token === pickToken) showScanStrip(images); })
         .catch(() => { /* no images archived */ });
     }
 
     // cassette editions: prefer the full original scan over thumbnails
-    let artUrls = r.artUrls || (r.artUrl ? [r.artUrl] : []);
+    let artUrls = info.artUrls || r.artUrls || (r.artUrl ? [r.artUrl] : []);
     if (r.isCassette && r.source === 'mb') {
       artUrls = [`https://coverartarchive.org/release/${r.id}/front`, ...artUrls];
+    }
+    // last resort for MB picks: the album's release-group art
+    if (r.source === 'mb' && r.rgArtUrls?.length) {
+      artUrls = [...artUrls, ...r.rgArtUrls];
     }
     if (artUrls.length) {
       // art failures must never look like the whole release failed

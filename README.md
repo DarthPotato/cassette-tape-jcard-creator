@@ -79,8 +79,15 @@ None needed. The data sources are:
 |---|---|---|
 | iTunes Search API | album search, track lists, durations, artwork | none (JSONP) |
 | MusicBrainz | album search, track lists (great for obscure/regional releases) | none |
-| Cover Art Archive | artwork for MusicBrainz releases | none |
+| Cover Art Archive | artwork/scans for MusicBrainz releases | none |
+| Discogs | cassette-edition search, multi-image scans (front/back/inside), side splits, barcodes | none* |
 | wsrv.nl | image proxy fallback so artwork can be embedded in PNG exports | none |
+
+\* Discogs works without any token. Pasting a free personal token (Search
+panel → "Optional: Discogs token") adds thumbnails in search results and
+raises the rate limit from 25 to 60 requests/min. The token is stored only in
+the visitor's own browser (localStorage) — safe for a static host like GitHub
+Pages, because each visitor brings their own.
 
 If you ever want to add Discogs/Last.fm/Spotify as extra sources, `js/api.js`
 is the only file to touch — each source is a small function that returns

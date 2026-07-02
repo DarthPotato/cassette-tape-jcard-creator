@@ -131,6 +131,10 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 .search-row { display: flex; gap: 8px; }
 .cass-check { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; margin: 10px 0 0; font-size: 13px; }
 .cass-check .sub { font-weight: 400; color: var(--ink-soft); }
+.token-details { margin-top: 8px; font-size: 12.5px; }
+.token-details summary { cursor: pointer; color: var(--ink-soft); font-weight: 600; }
+.token-details label { margin-top: 6px; }
+.token-details input { max-width: 340px; }
 .search-row input { margin-top: 0; flex: 1; }
 .status { margin-top: 10px; font-size: 13px; color: var(--ink-soft); }
 .results { list-style: none; margin: 10px 0 0; padding: 0; max-height: 340px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
