@@ -113,6 +113,10 @@
           <label>Pan X <input id="art-x" type="range" min="0" max="1" step="0.01" value="0.5"></label>
           <label>Pan Y <input id="art-y" type="range" min="0" max="1" step="0.01" value="0.5"></label>
         </div>
+        <div id="scan-strip" class="scan-strip" hidden>
+          <h4>Scans from this release <span class="sub">— click one to use it (originals, full resolution)</span></h4>
+          <div class="scan-row"></div>
+        </div>
       </div>
     </details>
 
@@ -124,6 +128,7 @@
           <label><input type="radio" name="layout" value="classic" checked><span>Classic<small>art + text</small></span></label>
           <label><input type="radio" name="layout" value="fullbleed"><span>Full bleed<small>art fills front</small></span></label>
           <label><input type="radio" name="layout" value="minimal"><span>Minimal<small>type only</small></span></label>
+          <label><input type="radio" name="layout" value="replica"><span>&#128252; Replica<small>original scan = card</small></span></label>
         </fieldset>
 
         <label class="stack">Typeface
