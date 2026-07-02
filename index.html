@@ -43,6 +43,8 @@
           <input id="search-input" type="search" placeholder="Album or artist — e.g. “Rumours Fleetwood Mac”" autocomplete="off" aria-label="Search for an album">
           <button id="search-btn" class="btn btn-primary" type="button">Search</button>
         </div>
+        <label class="check cass-check"><input id="f-cassonly" type="checkbox"> &#128252; Real cassette editions only
+          <span class="sub">— finds actual tape releases: original J&#8209;card artwork &amp; factory side&nbsp;split when available</span></label>
         <p class="hint">Searches iTunes &amp; MusicBrainz — free, no API key. Tracks, times and cover art auto-fill.
           <button id="demo-btn" class="linklike" type="button">or load a demo album</button>
         </p>
@@ -63,7 +65,10 @@
         <label>Year
           <input id="f-year" type="text" inputmode="numeric" placeholder="1984">
         </label>
-        <label>Note line <span class="sub">(shown small on the front)</span>
+        <label>Barcode <span class="sub">(EAN/UPC — blank = auto)</span>
+          <input id="f-barcodenum" type="text" inputmode="numeric" placeholder="auto-generated">
+        </label>
+        <label class="span-2">Note line <span class="sub">(shown small on the front)</span>
           <input id="f-note" type="text" placeholder="Stereo · Dolby NR · C-90">
         </label>
         <label class="span-2">Spine text <span class="sub">(leave blank for “Artist — Album”)</span>
@@ -139,6 +144,7 @@
         <div class="toggles">
           <label class="check"><input id="f-spineinvert" type="checkbox" checked> Accent spine</label>
           <label class="check"><input id="f-stripes" type="checkbox" checked> Retro stripes</label>
+          <label class="check"><input id="f-barcode" type="checkbox" checked> Barcode</label>
           <label class="check"><input id="f-uppercase" type="checkbox"> UPPERCASE titles</label>
           <label class="check"><input id="f-sidelabels" type="checkbox" checked> Side A/B labels</label>
           <label class="check"><input id="f-foldlines" type="checkbox" checked> Fold guides</label>

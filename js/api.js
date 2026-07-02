@@ -45,26 +45,41 @@ async function searchItunes(q) {
   }));
 }
 
-async function searchMusicBrainz(q) {
-  const data = await getJSON(`https://musicbrainz.org/ws/2/release/?query=${encodeURIComponent(q)}&fmt=json&limit=10`);
-  return (data.releases || []).map(r => ({
-    source: 'mb',
-    id: r.id,
-    title: r.title || '',
-    artist: (r['artist-credit'] || []).map(c => (c.name || '') + (c.joinphrase || '')).join('') || 'Unknown artist',
-    year: (r.date || '').slice(0, 4),
-    trackCount: r['track-count'] || null,
-    thumb: `https://coverartarchive.org/release/${r.id}/front-250`,
-    artUrl: `https://coverartarchive.org/release/${r.id}/front-1200`,
-    thumbMayFail: true,
-  }));
+async function searchMusicBrainz(q, cassetteOnly = false) {
+  const query = cassetteOnly ? `(${q}) AND format:cassette` : q;
+  const data = await getJSON(`https://musicbrainz.org/ws/2/release/?query=${encodeURIComponent(query)}&fmt=json&limit=12`);
+  return (data.releases || []).map(r => {
+    const formats = [...new Set((r.media || []).map(m => m.format).filter(Boolean))];
+    return {
+      source: 'mb',
+      id: r.id,
+      title: r.title || '',
+      artist: (r['artist-credit'] || []).map(c => (c.name || '') + (c.joinphrase || '')).join('') || 'Unknown artist',
+      year: (r.date || '').slice(0, 4),
+      trackCount: r['track-count'] || null,
+      country: r.country || '',
+      formats,
+      isCassette: formats.some(f => /cassette/i.test(f)),
+      thumb: `https://coverartarchive.org/release/${r.id}/front-250`,
+      artUrl: `https://coverartarchive.org/release/${r.id}/front-1200`,
+      // older CAA uploads sometimes lack the 1200px thumbnail
+      artUrls: [
+        `https://coverartarchive.org/release/${r.id}/front-1200`,
+        `https://coverartarchive.org/release/${r.id}/front-500`,
+      ],
+      thumbMayFail: true,
+    };
+  });
 }
 
 /**
  * Search both sources in parallel and merge (iTunes first — it has inline
  * artwork and durations — then MusicBrainz results not already covered).
+ * With cassetteOnly, only MusicBrainz is searched: it catalogs physical
+ * editions, so the artwork is the real tape J-card where a scan exists.
  */
-export async function searchAlbums(q) {
+export async function searchAlbums(q, { cassetteOnly = false } = {}) {
+  if (cassetteOnly) return searchMusicBrainz(q, true);
   const [it, mb] = await Promise.allSettled([searchItunes(q), searchMusicBrainz(q)]);
   const results = [];
   const seen = new Set();
@@ -85,36 +100,42 @@ export async function searchAlbums(q) {
 
 async function itunesTracks(id) {
   const data = await jsonp(`https://itunes.apple.com/lookup?id=${encodeURIComponent(id)}&entity=song&limit=200`);
-  return (data.results || [])
+  const tracks = (data.results || [])
     .filter(r => r.wrapperType === 'track' && r.kind === 'song')
     .sort((a, b) => (a.discNumber - b.discNumber) || (a.trackNumber - b.trackNumber))
     .map(r => ({
       title: r.trackName || 'Untitled',
       duration: r.trackTimeMillis ? Math.round(r.trackTimeMillis / 1000) : null,
     }));
+  return { tracks, hasSides: false, barcode: '' };
 }
 
 async function musicBrainzTracks(id) {
   const data = await getJSON(`https://musicbrainz.org/ws/2/release/${encodeURIComponent(id)}?inc=recordings&fmt=json`);
+  const media = (data.media || []).slice().sort((a, b) => (a.position || 0) - (b.position || 0));
+  // A two-media sided release (cassette / vinyl) carries the real A/B split.
+  const hasSides = media.length === 2 &&
+    media.every(m => /cassette|vinyl|lp|\b7"|10"|12"|reel/i.test(m.format || ''));
   const tracks = [];
-  for (const medium of data.media || []) {
+  media.forEach((medium, mi) => {
     for (const t of medium.tracks || []) {
       tracks.push({
         title: t.title || t.recording?.title || 'Untitled',
         duration: t.length ? Math.round(t.length / 1000) : (t.recording?.length ? Math.round(t.recording.length / 1000) : null),
+        side: hasSides ? (mi === 0 ? 'A' : 'B') : undefined,
       });
     }
-  }
-  return tracks;
+  });
+  return { tracks, hasSides, barcode: (data.barcode || '').trim() };
 }
 
-/** result item from searchAlbums() -> {tracks, artUrl} */
+/** result item from searchAlbums() -> {tracks[], hasSides, barcode} */
 export async function getAlbumTracks(result) {
-  const tracks = result.source === 'itunes'
+  const info = result.source === 'itunes'
     ? await itunesTracks(result.id)
     : await musicBrainzTracks(result.id);
-  if (!tracks.length) throw new Error('No tracks found for that release.');
-  return tracks;
+  if (!info.tracks.length) throw new Error('No tracks found for that release.');
+  return info;
 }
 
 /* ---------------- cover art ---------------- */
@@ -160,8 +181,22 @@ export async function loadArt(url) {
     } catch { /* fall through */ }
   }
   if (!dataUrl) return { srcUrl: url, dataUrl: null, w: 0, h: 0 };
-  const { w, h } = await imageDims(dataUrl);
-  return { dataUrl, srcUrl: url, w, h };
+  try {
+    const { w, h } = await imageDims(dataUrl);
+    return { dataUrl, srcUrl: url, w, h };
+  } catch {
+    // undecodable payload — fall back to preview-by-URL
+    return { srcUrl: url, dataUrl: null, w: 0, h: 0 };
+  }
+}
+
+/** try several candidate URLs (best first); first one that embeds wins */
+export async function loadBestArt(urls) {
+  for (const url of urls) {
+    const art = await loadArt(url);
+    if (art.dataUrl) return art;
+  }
+  return { srcUrl: urls[0] || null, dataUrl: null, w: 0, h: 0 };
 }
 
 /** an uploaded File -> {dataUrl, w, h}, downscaled to keep localStorage happy */

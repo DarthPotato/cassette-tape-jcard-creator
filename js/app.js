@@ -1,7 +1,7 @@
 import { $, $$, esc, mmss, parseDuration, toast, debounce, uid, clamp } from './util.js';
 import { defaultState, loadSaved, save, clearSaved, mergeState, autoBalance, sideSeconds, FONTS, PRESETS } from './state.js';
 import { renderJCard } from './jcard.js';
-import { searchAlbums, getAlbumTracks, loadArt, loadUpload } from './api.js';
+import { searchAlbums, getAlbumTracks, loadBestArt, loadUpload } from './api.js';
 import { exportPNG, printCard, saveDesign, readDesignFile } from './export.js';
 import { extractPalette, contrastText } from './palette.js';
 import { demoState } from './demo.js';
@@ -36,7 +36,7 @@ function changed({ tracksDom = false, form = false } = {}) {
 
 const fields = {
   '#f-album': ['album'], '#f-artist': ['artist'], '#f-year': ['year'],
-  '#f-note': ['noteLine'], '#f-spine': ['spineText'],
+  '#f-note': ['noteLine'], '#f-spine': ['spineText'], '#f-barcodenum': ['barcode'],
 };
 
 function syncFormFromState() {
@@ -49,6 +49,7 @@ function syncFormFromState() {
   $('#f-durations').checked = state.design.showDurations;
   $('#f-spineinvert').checked = state.design.spineInvert;
   $('#f-stripes').checked = state.design.stripes;
+  $('#f-barcode').checked = state.design.showBarcode;
   $('#f-uppercase').checked = state.design.uppercase;
   $('#f-sidelabels').checked = state.design.showSideLabels;
   $('#f-foldlines').checked = state.design.showFoldLines;
@@ -114,7 +115,8 @@ $$('input[name="layout"]').forEach(r =>
 
 const toggleMap = {
   '#f-durations': 'showDurations', '#f-spineinvert': 'spineInvert', '#f-stripes': 'stripes',
-  '#f-uppercase': 'uppercase', '#f-sidelabels': 'showSideLabels', '#f-foldlines': 'showFoldLines',
+  '#f-barcode': 'showBarcode', '#f-uppercase': 'uppercase',
+  '#f-sidelabels': 'showSideLabels', '#f-foldlines': 'showFoldLines',
 };
 for (const [sel, key] of Object.entries(toggleMap)) {
   $(sel).addEventListener('change', e => { state.design[key] = e.target.checked; changed(); });
@@ -235,17 +237,24 @@ async function runSearch() {
   if (!q) { searchInput.focus(); return; }
   resultsList.hidden = true;
   resultsList.innerHTML = '';
-  setStatus('Searching iTunes & MusicBrainz…');
+  const cassetteOnly = $('#f-cassonly').checked;
+  setStatus(cassetteOnly ? 'Searching MusicBrainz for cassette editions…' : 'Searching iTunes & MusicBrainz…');
   try {
-    const results = await searchAlbums(q);
-    if (!results.length) { setStatus('No albums found — try adding the artist name.'); return; }
+    const results = await searchAlbums(q, { cassetteOnly });
+    if (!results.length) {
+      setStatus(cassetteOnly
+        ? 'No cassette editions found — try fewer words, or untick “cassette editions only”.'
+        : 'No albums found — try adding the artist name.');
+      return;
+    }
     setStatus('');
     for (const r of results) {
       const li = document.createElement('li');
-      const sub = [r.artist, r.year, r.trackCount ? `${r.trackCount} tracks` : null].filter(Boolean).join(' · ');
+      const sub = [r.artist, r.year, r.trackCount ? `${r.trackCount} tracks` : null,
+        r.isCassette ? `Cassette${r.country ? ` · ${r.country}` : ''}` : null].filter(Boolean).join(' · ');
       li.innerHTML = `<button type="button">
         ${r.thumb ? `<img src="${esc(r.thumb)}" alt="" loading="lazy">` : '<span class="noart"></span>'}
-        <span class="meta"><span class="r-title">${esc(r.title)}</span><span class="r-sub">${esc(sub)}</span></span>
+        <span class="meta"><span class="r-title">${r.isCassette ? '&#128252; ' : ''}${esc(r.title)}</span><span class="r-sub">${esc(sub)}</span></span>
         <span class="src">${r.source === 'itunes' ? 'itunes' : 'mbrainz'}</span>
       </button>`;
       const img = li.querySelector('img');
@@ -266,24 +275,37 @@ async function pickAlbum(r) {
   setStatus(`Loading “${r.title}”…`);
   resultsList.hidden = true;
   try {
-    const tracks = await getAlbumTracks(r);
+    const info = await getAlbumTracks(r);
     state.album = r.title;
     state.artist = r.artist;
     state.year = r.year || '';
-    state.tracks = tracks.map(t => ({ id: uid(), ...t, side: 'A' }));
-    autoBalance(state);
+    state.barcode = info.barcode || '';
+    state.tracks = info.tracks.map(t => ({ id: uid(), title: t.title, duration: t.duration, side: t.side || 'A' }));
+    if (!info.hasSides) autoBalance(state);
     changed({ tracksDom: true, form: true });
     setStatus('');
-    toast(`Loaded ${tracks.length} tracks from “${r.title}”.`);
+    toast(info.hasSides
+      ? `Loaded ${info.tracks.length} tracks with the release’s real Side A/B split.`
+      : `Loaded ${info.tracks.length} tracks from “${r.title}”.`);
 
-    if (r.artUrl) {
-      setStatus('Fetching cover art…');
-      const art = await loadArt(r.artUrl);
-      state.cover = { ...state.cover, ...art, zoom: 1, x: 0.5, y: 0.5 };
-      updateArtThumb();
-      changed();
+    const artUrls = r.artUrls || (r.artUrl ? [r.artUrl] : []);
+    if (artUrls.length) {
+      // art failures must never look like the whole release failed
+      try {
+        setStatus(r.source === 'mb'
+          ? 'Fetching cover art (the Cover Art Archive can take a little while)…'
+          : 'Fetching cover art…');
+        const art = await loadBestArt(artUrls);
+        if (art.dataUrl || art.srcUrl) {
+          state.cover = { ...state.cover, ...art, zoom: 1, x: 0.5, y: 0.5 };
+          updateArtThumb();
+          changed();
+        }
+        if (!art.dataUrl) toast('Cover art is preview-only (its host blocked the download) — it may be missing from PNG export. Try uploading the image instead.', 6000);
+      } catch {
+        toast('No cover art found for this release — you can upload an image instead.', 5000);
+      }
       setStatus('');
-      if (!art.dataUrl) toast('Cover art is preview-only (its host blocks downloads) — it may be missing from PNG export. Try uploading the image instead.', 6000);
     }
   } catch (err) {
     setStatus(`Couldn’t load that release: ${err.message}`);
