@@ -564,8 +564,13 @@ async function addScanLayer(im) {
     const art = await loadBestArt(im.urls);
     if (!art.dataUrl && !art.srcUrl) throw new Error('no image');
     // keep the current full-card image as the base layer so adding a
-    // spine or back scan builds on it instead of replacing it
-    if (!state.scans.length && (state.cover.dataUrl || state.cover.srcUrl)) {
+    // spine or back scan builds on it instead of replacing it — but not
+    // when the clicked scan IS that image (the release front), which
+    // would put the same picture on the card twice
+    const sameAsCover = im.front ||
+      (state.cover.srcUrl && im.urls.includes(state.cover.srcUrl)) ||
+      (art.dataUrl && art.dataUrl === state.cover.dataUrl);
+    if (!state.scans.length && !sameAsCover && (state.cover.dataUrl || state.cover.srcUrl)) {
       state.scans.push({
         id: uid(), dataUrl: state.cover.dataUrl, srcUrl: state.cover.srcUrl,
         w: state.cover.w, h: state.cover.h, region: 'card',
@@ -634,6 +639,22 @@ $('#reset-btn').addEventListener('click', () => {
 
 $('#rotate-btn').addEventListener('click', () => {
   $('#card-stage').classList.toggle('rotated');
+});
+
+/* ================= dark theme ================= */
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  $('#theme-btn').textContent = theme === 'dark' ? '☀️' : '🌙';
+  $('#theme-btn').title = theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme';
+}
+
+applyTheme(document.documentElement.dataset.theme || 'light');
+
+$('#theme-btn').addEventListener('click', () => {
+  const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  try { localStorage.setItem('jcard-theme', next); } catch { /* storage blocked */ }
+  applyTheme(next);
 });
 
 /* ================= init ================= */
