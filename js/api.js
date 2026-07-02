@@ -1,8 +1,30 @@
 // Album metadata + cover art, all from free key-less sources:
 //   - iTunes Search API (JSONP, so CORS never matters)
 //   - MusicBrainz + Cover Art Archive (CORS-enabled JSON APIs)
+//   - Discogs (CORS-enabled; works without a token — an optional personal
+//     token only adds search thumbnails and a higher rate limit)
 //   - wsrv.nl as an image proxy fallback for hosts without CORS headers,
 //     so cover art can be embedded into the exported PNG.
+
+import { parseDuration } from './util.js';
+
+const DISCOGS_TOKEN_KEY = 'jcard-discogs-token';
+
+export function getDiscogsToken() {
+  try { return (localStorage.getItem(DISCOGS_TOKEN_KEY) || '').trim(); } catch { return ''; }
+}
+
+export function setDiscogsToken(token) {
+  try {
+    if (token) localStorage.setItem(DISCOGS_TOKEN_KEY, token.trim());
+    else localStorage.removeItem(DISCOGS_TOKEN_KEY);
+  } catch { /* storage blocked */ }
+}
+
+function discogsAuth() {
+  const t = getDiscogsToken();
+  return t ? `&token=${encodeURIComponent(t)}` : '';
+}
 
 const JSONP_TIMEOUT = 12000;
 
@@ -50,7 +72,14 @@ async function searchMusicBrainz(q, cassetteOnly = false) {
   const data = await getJSON(`https://musicbrainz.org/ws/2/release/?query=${encodeURIComponent(query)}&fmt=json&limit=12`);
   return (data.releases || []).map(r => {
     const formats = [...new Set((r.media || []).map(m => m.format).filter(Boolean))];
+    const rgId = r['release-group']?.id;
     return {
+      // when the release itself has no art, fall back to the album's
+      // release-group art so the card is never left blank
+      rgArtUrls: rgId ? [
+        `https://coverartarchive.org/release-group/${rgId}/front-1200`,
+        `https://coverartarchive.org/release-group/${rgId}/front-500`,
+      ] : [],
       source: 'mb',
       id: r.id,
       title: r.title || '',
@@ -72,14 +101,84 @@ async function searchMusicBrainz(q, cassetteOnly = false) {
   });
 }
 
+async function searchDiscogs(q, cassetteOnly = false) {
+  const fmt = cassetteOnly ? '&format=Cassette' : '';
+  const data = await getJSON(`https://api.discogs.com/database/search?q=${encodeURIComponent(q)}&type=release${fmt}&per_page=12${discogsAuth()}`);
+  return (data.results || []).map(r => {
+    // Discogs titles come as "Artist - Title"
+    const dash = (r.title || '').indexOf(' - ');
+    const artist = dash > 0 ? r.title.slice(0, dash) : '';
+    const title = dash > 0 ? r.title.slice(dash + 3) : (r.title || '');
+    const formats = r.format || [];
+    return {
+      source: 'discogs',
+      id: String(r.id),
+      title,
+      artist,
+      year: r.year ? String(r.year) : '',
+      trackCount: null,
+      country: r.country || '',
+      formats,
+      isCassette: formats.some(f => /cassette/i.test(f)),
+      thumb: r.thumb || null, // only present with a token
+      artUrl: null,           // resolved from the release detail at pick time
+      artUrls: null,
+    };
+  });
+}
+
+async function discogsTracks(id) {
+  const d = await getJSON(`https://api.discogs.com/releases/${encodeURIComponent(id)}?${discogsAuth().replace(/^&/, '')}`);
+  const items = (d.tracklist || []).filter(t => (t.type_ || 'track') === 'track');
+  const sideOf = pos => {
+    const m = /^([A-Za-z])/.exec(String(pos || '').trim());
+    return m ? m[1].toUpperCase() : null;
+  };
+  const sides = new Set(items.map(t => sideOf(t.position)).filter(Boolean));
+  const hasSides = sides.has('A') && sides.has('B');
+  const tracks = items.map(t => ({
+    title: t.title || 'Untitled',
+    duration: parseDuration(t.duration),
+    side: hasSides && sideOf(t.position) === 'B' ? 'B' : (hasSides ? 'A' : undefined),
+  }));
+  // prefer the machine-readable barcode variant
+  const barcodes = (d.identifiers || []).filter(i => i.type === 'Barcode').map(i => String(i.value || ''));
+  const barcode = barcodes.find(b => [12, 13].includes(b.replace(/\D/g, '').length)) || barcodes[0] || '';
+  const images = (d.images || []).map((img, i) => ({
+    label: img.type === 'primary' ? 'Front' : `Scan ${i + 1}`,
+    front: img.type === 'primary',
+    thumb: img.uri150 || null,
+    urls: [img.uri].filter(Boolean),
+  })).filter(im => im.urls.length);
+  return {
+    tracks,
+    hasSides,
+    barcode,
+    year: d.year ? String(d.year) : '',
+    images,
+    artUrls: images.length ? images[0].urls : [],
+  };
+}
+
 /**
  * Search both sources in parallel and merge (iTunes first — it has inline
  * artwork and durations — then MusicBrainz results not already covered).
- * With cassetteOnly, only MusicBrainz is searched: it catalogs physical
- * editions, so the artwork is the real tape J-card where a scan exists.
+ * With cassetteOnly, MusicBrainz and Discogs are searched: both catalog
+ * physical editions, so the artwork is the real tape J-card where a scan
+ * exists (Discogs works tokenless; a token only adds result thumbnails).
  */
 export async function searchAlbums(q, { cassetteOnly = false } = {}) {
-  if (cassetteOnly) return searchMusicBrainz(q, true);
+  if (cassetteOnly) {
+    const [mb, dc] = await Promise.allSettled([searchMusicBrainz(q, true), searchDiscogs(q, true)]);
+    const results = [
+      ...(mb.status === 'fulfilled' ? mb.value : []),
+      ...(dc.status === 'fulfilled' ? dc.value : []),
+    ];
+    if (!results.length && mb.status === 'rejected' && dc.status === 'rejected') {
+      throw new Error('MusicBrainz and Discogs were both unreachable. Check your connection and try again.');
+    }
+    return results;
+  }
   const [it, mb] = await Promise.allSettled([searchItunes(q), searchMusicBrainz(q)]);
   const results = [];
   const seen = new Set();
@@ -129,10 +228,10 @@ async function musicBrainzTracks(id) {
   return { tracks, hasSides, barcode: (data.barcode || '').trim() };
 }
 
-/** result item from searchAlbums() -> {tracks[], hasSides, barcode} */
+/** result item from searchAlbums() -> {tracks[], hasSides, barcode, images?, artUrls?} */
 export async function getAlbumTracks(result) {
-  const info = result.source === 'itunes'
-    ? await itunesTracks(result.id)
+  const info = result.source === 'itunes' ? await itunesTracks(result.id)
+    : result.source === 'discogs' ? await discogsTracks(result.id)
     : await musicBrainzTracks(result.id);
   if (!info.tracks.length) throw new Error('No tracks found for that release.');
   return info;
