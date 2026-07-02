@@ -16,6 +16,11 @@ Inspired by tools like vhs.texs.org, but 100% free and self-hostable.
   tape releases on MusicBrainz. Where the Cover Art Archive has a scan you get
   the **original J-card artwork**, plus the **factory Side A/B split** (tape
   releases are stored as two-sided media) and the release's real barcode.
+- **Replica layout** — the original scan *becomes* the whole printable card:
+  full-card cassette scans are detected automatically, loaded at the archive's
+  full original resolution, laid across all three panels, and the design
+  colors are matched to the scan. A scan picker lists every image the archive
+  holds for the release (front, back, spine…) so you can print the real thing.
 - **Barcode** — a toggleable, spec-correct EAN-13 barcode on the back flap:
   the release's real EAN/UPC when known (auto-filled from MusicBrainz, or
   type your own), otherwise a stable checksum-valid code generated from the

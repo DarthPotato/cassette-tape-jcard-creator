@@ -1,7 +1,7 @@
 import { $, $$, esc, mmss, parseDuration, toast, debounce, uid, clamp } from './util.js';
 import { defaultState, loadSaved, save, clearSaved, mergeState, autoBalance, sideSeconds, FONTS, PRESETS } from './state.js';
 import { renderJCard } from './jcard.js';
-import { searchAlbums, getAlbumTracks, loadBestArt, loadUpload } from './api.js';
+import { searchAlbums, getAlbumTracks, loadBestArt, loadUpload, getReleaseImages } from './api.js';
 import { exportPNG, printCard, saveDesign, readDesignFile } from './export.js';
 import { extractPalette, contrastText } from './palette.js';
 import { demoState } from './demo.js';
@@ -271,11 +271,16 @@ async function runSearch() {
 $('#search-btn').addEventListener('click', runSearch);
 searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') runSearch(); });
 
+let pickToken = 0;
+
 async function pickAlbum(r) {
+  const token = ++pickToken;
   setStatus(`Loading “${r.title}”…`);
   resultsList.hidden = true;
+  clearScanStrip();
   try {
     const info = await getAlbumTracks(r);
+    if (token !== pickToken) return;
     state.album = r.title;
     state.artist = r.artist;
     state.year = r.year || '';
@@ -288,7 +293,18 @@ async function pickAlbum(r) {
       ? `Loaded ${info.tracks.length} tracks with the release’s real Side A/B split.`
       : `Loaded ${info.tracks.length} tracks from “${r.title}”.`);
 
-    const artUrls = r.artUrls || (r.artUrl ? [r.artUrl] : []);
+    // offer every scan the Cover Art Archive holds for this release
+    if (r.source === 'mb') {
+      getReleaseImages(r.id)
+        .then(images => { if (token === pickToken) showScanStrip(images); })
+        .catch(() => { /* no images archived */ });
+    }
+
+    // cassette editions: prefer the full original scan over thumbnails
+    let artUrls = r.artUrls || (r.artUrl ? [r.artUrl] : []);
+    if (r.isCassette && r.source === 'mb') {
+      artUrls = [`https://coverartarchive.org/release/${r.id}/front`, ...artUrls];
+    }
     if (artUrls.length) {
       // art failures must never look like the whole release failed
       try {
@@ -296,24 +312,91 @@ async function pickAlbum(r) {
           ? 'Fetching cover art (the Cover Art Archive can take a little while)…'
           : 'Fetching cover art…');
         const art = await loadBestArt(artUrls);
+        if (token !== pickToken) return;
         if (art.dataUrl || art.srcUrl) {
           state.cover = { ...state.cover, ...art, zoom: 1, x: 0.5, y: 0.5 };
           updateArtThumb();
           changed();
         }
-        if (!art.dataUrl) toast('Cover art is preview-only (its host blocked the download) — it may be missing from PNG export. Try uploading the image instead.', 6000);
+        if (!art.dataUrl) {
+          toast('Cover art is preview-only (its host blocked the download) — it may be missing from PNG export. Try uploading the image instead.', 6000);
+        } else if (r.isCassette) {
+          await applyCassetteScan(art, r);
+        }
       } catch {
         toast('No cover art found for this release — you can upload an image instead.', 5000);
       }
-      setStatus('');
+      if (token === pickToken) setStatus('');
     }
   } catch (err) {
-    setStatus(`Couldn’t load that release: ${err.message}`);
+    if (token === pickToken) setStatus(`Couldn’t load that release: ${err.message}`);
   }
+}
+
+/**
+ * A cassette scan that isn't a landscape front-panel photo is (or contains)
+ * the full unfolded J-card: print it as-is via the Replica layout, and carry
+ * the original's colors into the design for anything still generated.
+ */
+async function applyCassetteScan(art, r) {
+  let replica = false;
+  if (art.w && art.h && art.w / art.h <= 1.2) {
+    state.design.layout = 'replica';
+    replica = true;
+  }
+  try {
+    const pal = await extractPalette(art.dataUrl);
+    Object.assign(state.design, pal);
+  } catch { /* keep current colors */ }
+  changed({ form: true });
+  toast(replica
+    ? 'Original J-card scan loaded as a print replica, colors matched. Zoom/pan to align; other layouts are one click away.'
+    : 'Cassette edition loaded with matched colors — try the Replica layout to print the scan as the whole card.', 6500);
+}
+
+/* ---- release scan strip ---- */
+
+function clearScanStrip() {
+  const strip = $('#scan-strip');
+  strip.hidden = true;
+  strip.querySelector('.scan-row').innerHTML = '';
+}
+
+function showScanStrip(images) {
+  const strip = $('#scan-strip');
+  const row = strip.querySelector('.scan-row');
+  row.innerHTML = '';
+  if (!images.length) { strip.hidden = true; return; }
+  for (const im of images) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'scan-item';
+    btn.title = `Use this ${im.label.toLowerCase()} scan`;
+    btn.innerHTML = `${im.thumb ? `<img src="${esc(im.thumb)}" alt="" loading="lazy">` : ''}<span class="scan-label">${esc(im.label)}</span>`;
+    const thumbImg = btn.querySelector('img');
+    if (thumbImg) thumbImg.addEventListener('error', () => thumbImg.remove());
+    btn.addEventListener('click', async () => {
+      setStatus('Loading scan at full resolution…');
+      try {
+        const art = await loadBestArt(im.urls);
+        if (!art.dataUrl && !art.srcUrl) throw new Error('no image');
+        state.cover = { ...state.cover, ...art, zoom: 1, x: 0.5, y: 0.5 };
+        updateArtThumb();
+        changed();
+        toast(`Using the ${im.label.toLowerCase()} scan${art.w ? ` (${art.w}×${art.h}px)` : ''}.`);
+      } catch {
+        toast('Could not load that scan.');
+      }
+      setStatus('');
+    });
+    row.appendChild(btn);
+  }
+  strip.hidden = false;
 }
 
 $('#demo-btn').addEventListener('click', () => {
   state = demoState(state);
+  clearScanStrip();
   changed({ tracksDom: true, form: true });
   toast('Demo album loaded — everything is editable.');
 });
@@ -395,6 +478,7 @@ $('#load-json').addEventListener('change', async e => {
   if (!file) return;
   try {
     state = mergeState(await readDesignFile(file));
+    clearScanStrip();
     changed({ tracksDom: true, form: true });
     toast('Design loaded.');
   } catch (err) {
@@ -406,6 +490,7 @@ $('#reset-btn').addEventListener('click', () => {
   if (!confirm('Reset everything? This clears the current design.')) return;
   state = defaultState();
   clearSaved();
+  clearScanStrip();
   changed({ tracksDom: true, form: true });
 });
 

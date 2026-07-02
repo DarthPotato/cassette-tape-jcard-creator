@@ -182,12 +182,43 @@ export async function loadArt(url) {
   }
   if (!dataUrl) return { srcUrl: url, dataUrl: null, w: 0, h: 0 };
   try {
-    const { w, h } = await imageDims(dataUrl);
+    let { w, h } = await imageDims(dataUrl);
+    // full-resolution CAA scans can be huge; 2200px ≈ 540 dpi on a J-card,
+    // plenty for print while keeping localStorage happy
+    const MAX = 2200;
+    if (Math.max(w, h) > MAX) {
+      const scale = MAX / Math.max(w, h);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(w * scale);
+      canvas.height = Math.round(h * scale);
+      canvas.getContext('2d').drawImage(await loadImg(dataUrl), 0, 0, canvas.width, canvas.height);
+      dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+      w = canvas.width; h = canvas.height;
+    }
     return { dataUrl, srcUrl: url, w, h };
   } catch {
     // undecodable payload — fall back to preview-by-URL
     return { srcUrl: url, dataUrl: null, w: 0, h: 0 };
   }
+}
+
+/**
+ * All artwork the Cover Art Archive holds for a release (front, back, spine,
+ * booklet scans…), each with a thumbnail and a best-first list of fetch URLs.
+ * The full original scan is preferred: replica printing wants resolution.
+ */
+export async function getReleaseImages(mbid) {
+  const data = await getJSON(`https://coverartarchive.org/release/${encodeURIComponent(mbid)}`);
+  const https = u => (u ? u.replace(/^http:/, 'https:') : null);
+  return (data.images || []).map(img => {
+    const t = img.thumbnails || {};
+    return {
+      label: (img.types || []).join(' + ') || 'Image',
+      front: !!img.front,
+      thumb: https(t['250'] || t.small || t['500'] || t.large),
+      urls: [...new Set([https(img.image), https(t['1200'] || t.large), https(t['500'])].filter(Boolean))],
+    };
+  }).filter(im => im.urls.length);
 }
 
 /** try several candidate URLs (best first); first one that embeds wins */

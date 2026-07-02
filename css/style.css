@@ -196,9 +196,25 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 .sliders input[type="range"] { width: 100%; accent-color: var(--red); }
 
 /* ============ design ============ */
+.scan-strip { margin-top: 14px; }
+.scan-strip h4 { margin: 0 0 6px; font-size: 13px; color: var(--ink-soft); }
+.scan-strip h4 .sub { font-weight: 400; }
+.scan-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.scan-item {
+  flex: none; width: 74px; cursor: pointer;
+  background: none; border: 2px solid var(--line); border-radius: 8px; padding: 3px;
+  font: inherit; color: var(--ink-soft);
+}
+.scan-item:hover { border-color: var(--red); }
+.scan-item img { width: 100%; height: 64px; object-fit: cover; border-radius: 5px; display: block; background: #eee3cc; }
+.scan-item .scan-label {
+  display: block; font-size: 10.5px; font-weight: 600; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px;
+}
+
 fieldset { border: none; margin: 0 0 12px; padding: 0; }
 legend { font-size: 13px; font-weight: 600; color: var(--ink-soft); padding: 0; margin-bottom: 6px; }
-.layout-picker { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.layout-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .layout-picker legend { grid-column: 1 / -1; }
 .layout-picker label { cursor: pointer; }
 .layout-picker input { position: absolute; opacity: 0; }

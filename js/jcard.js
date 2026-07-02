@@ -432,11 +432,27 @@ export function renderJCard(state, opts = {}) {
   let defs = `<clipPath id="${o.id}-backclip"><rect x="0" y="0" width="${W}" height="${BACK}"/></clipPath>
     <clipPath id="${o.id}-cardclip"><rect x="0" y="0" width="${W}" height="${H}"/></clipPath>`;
 
-  let body = renderBackFlap(state, o);
-  body += renderSpine(state, o);
-  const front = renderFront(state, o);
-  body += front.body;
-  defs += front.defs;
+  let body;
+  if (d.layout === 'replica') {
+    // the original J-card scan IS the card: no generated text, spine or barcode
+    body = `<rect x="0" y="0" width="${W}" height="${H}" fill="${d.bg}"/>`;
+    const img = artImage(state.cover, { x: 0, y: 0, w: W, h: H }, `${o.id}-replica`);
+    if (img) {
+      defs += img.defs;
+      body += img.body;
+    } else if (o.placeholders) {
+      body += cassetteGlyph(W / 2 - 13, H * 0.32, 26, d.accent, 'none');
+      body += textEl(W / 2, H * 0.56, 'Replica layout', 4.2, { fill: d.text, anchor: 'middle', weight: o.bold, opacity: 0.75 });
+      body += textEl(W / 2, H * 0.56 + 6, 'load a cassette edition or upload a full J-card scan', 2.7, { fill: d.text, anchor: 'middle', opacity: 0.55 });
+      body += textEl(W / 2, H * 0.56 + 10.5, 'and it becomes the whole printable card', 2.7, { fill: d.text, anchor: 'middle', opacity: 0.55 });
+    }
+  } else {
+    body = renderBackFlap(state, o);
+    body += renderSpine(state, o);
+    const front = renderFront(state, o);
+    body += front.body;
+    defs += front.defs;
+  }
 
   if (d.showFoldLines) {
     const stroke = mix(d.text, d.bg, 0.45);

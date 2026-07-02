@@ -97,7 +97,7 @@ export function mergeState(obj) {
   }
   if (obj.design && typeof obj.design === 'object') {
     const d = obj.design;
-    if (['classic', 'fullbleed', 'minimal'].includes(d.layout)) s.design.layout = d.layout;
+    if (['classic', 'fullbleed', 'minimal', 'replica'].includes(d.layout)) s.design.layout = d.layout;
     if (typeof d.font === 'string' && FONTS[d.font]) s.design.font = d.font;
     for (const k of ['bg', 'text', 'accent']) {
       if (typeof d[k] === 'string' && /^#[0-9a-fA-F]{6}$/.test(d[k])) s.design[k] = d[k].toLowerCase();
