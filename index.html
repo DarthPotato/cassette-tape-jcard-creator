@@ -6,6 +6,12 @@
 <title>J-Card Creator — free printable cassette J-cards</title>
 <meta name="description" content="Make printable cassette tape J-cards for free. Search any album to auto-fill the track list and cover art, customize the design, and export a print-ready PNG or print straight to PDF. No account, no watermark, no paywall.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='6' width='30' height='20' rx='3' fill='%231d1a17'/%3E%3Crect x='7' y='11' width='18' height='7' rx='3.5' fill='%23f6efdf'/%3E%3Ccircle cx='11' cy='14.5' r='2' fill='%231d1a17'/%3E%3Ccircle cx='21' cy='14.5' r='2' fill='%231d1a17'/%3E%3Crect x='4' y='8' width='24' height='1.6' fill='%23d64524'/%3E%3C/svg%3E">
+<script>
+// set the theme before CSS paints to avoid a light flash for dark users
+document.documentElement.dataset.theme =
+  localStorage.getItem('jcard-theme') ||
+  (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+</script>
 <link rel="stylesheet" href="css/fonts.css">
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -28,6 +34,7 @@
       <h1>J&#8209;Card Creator</h1>
       <p class="tagline">Free printable cassette J&#8209;cards. Search an album, tweak the design, print. No account. No watermark. No paywall.</p>
     </div>
+    <button id="theme-btn" class="btn btn-small theme-btn" type="button" aria-label="Toggle dark theme">&#127769;</button>
   </div>
 </header>
 
